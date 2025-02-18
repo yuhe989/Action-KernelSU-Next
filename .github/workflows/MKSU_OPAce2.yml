@@ -79,14 +79,17 @@ jobs:
            cd ./msm-kernel && git add -A && git commit -a -m "BUILD Kernel"
            cd ..
            
-         
       - name: Build kernel
         run: |
          cd kernel_workspace
          export LTO=thin
          ./kernel_platform/oplus/build/oplus_build_kernel.sh waipio gki
-         mkdir -p kernel_platform/out/msm-waipio-waipio-gki/dist/
-         cp $(find kernel_platform/out/ -name "Image") kernel_platform/out/msm-waipio-waipio-gki/dist/
+         
+      - name: Make AnyKernel3
+        run: |
+         git clone https://github.com/TanakaLun/AnyKernel3 --depth=1
+         rm -rf ./AnyKernel3/.git
+         cp kernel_workspace/kernel_platform/out/msm-waipio-waipio-gki/dist/Image ./AnyKernel3/
 
       - name: Download Latest SUSFS Module
         run: |
