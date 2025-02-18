@@ -1,11 +1,10 @@
 name: Build MKSU SUSFS For OPAce2
 on:
-  workflow_dispatch:
-
+  workflow_dispatch: 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
@@ -16,6 +15,11 @@ jobs:
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
+          
+      - name: Configure Git
+        run: |
+         git config --global user.name "build"
+         git config --global user.email "3436378798@qq.com"
 
       - name: Install dependencies
         run: |
@@ -37,15 +41,8 @@ jobs:
          find kernel_platform/msm-kernel/android/ -name "abi_gki_protected_exports_*" -delete
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
-         sed -i '$s|echo "\$res"|echo "$res-android12-Mortis"|' kernel_platform/common/scripts/setlocalversion            
-         sed -i '$s|echo "\$res"|echo "$res-android12-Mortis"|' kernel_platform/msm-kernel/scripts/setlocalversion            
-
-      - name: Modify kernel version in Makefile
-        run: |
-         sed -i 's/^VERSION = .*/VERSION = 5/' kernel_workspace/kernel_platform/Makefile
-         sed -i 's/^PATCHLEVEL = .*/PATCHLEVEL = 10/' kernel_workspace/kernel_platform/Makefile
-         sed -i 's/^SUBLEVEL = .*/SUBLEVEL = 209/' kernel_workspace/kernel_platform/Makefile
-         sed -i 's/^EXTRAVERSION = .*/EXTRAVERSION = -android12-Mortis/' kernel_workspace/kernel_platform/Makefile
+         sed -i '$s|echo "\$res"|echo "$res-Mortis"|' kernel_platform/common/scripts/setlocalversion            
+         sed -i '$s|echo "\$res"|echo "$res-Mortis"|' kernel_platform/msm-kernel/scripts/setlocalversion            
 
       - name: Set up MKSU
         run: |
@@ -82,27 +79,14 @@ jobs:
            cd ./msm-kernel && git add -A && git commit -a -m "BUILD Kernel"
            cd ..
            
+         
       - name: Build kernel
         run: |
          cd kernel_workspace
          export LTO=thin
          ./kernel_platform/oplus/build/oplus_build_kernel.sh waipio gki
-
-      - name: Debug Kernel Output
-        run: |
-         ls -lR kernel_workspace/kernel_platform/out/
-
-      - name: Make AnyKernel3
-        run: |
-         git clone https://github.com/TanakaLun/AnyKernel3 --depth=1
-         rm -rf ./AnyKernel3/.git
-         IMAGE_PATH=$(find kernel_workspace/kernel_platform/out/ -name "Image" | head -n 1)
-         if [ -z "$IMAGE_PATH" ]; then
-           echo "Error: Image not found!"
-           exit 1
-         fi
-         echo "Found Image at: $IMAGE_PATH"
-         cp "$IMAGE_PATH" ./AnyKernel3/
+         mkdir -p kernel_platform/out/msm-waipio-waipio-gki/dist/
+         cp $(find kernel_platform/out/ -name "Image") kernel_platform/out/msm-waipio-waipio-gki/dist/
 
       - name: Download Latest SUSFS Module
         run: |
