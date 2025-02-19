@@ -1,6 +1,11 @@
-name: Build MKSU SUSFS For OPAce2
+name: Build MKSU-SUSFS For OPA3P
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
+   inputs:
+      FEIL:
+        description: "配置文件"
+        required: true
+        default: 'oneplus_ace3_pro_v'  
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
          sudo apt update && sudo apt upgrade -y
-         sudo apt install -y python3 git
+         sudo apt install -y python3 git curl
 
       - name: Install repo tool
         run: |
@@ -35,20 +40,21 @@ jobs:
       - name: Initialize repo 和 sync
         run: |
          mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8475 -m oneplus_11r_v.xml --depth=1
-         repo sync         
-         find kernel_platform/common/android/ -name "abi_gki_protected_exports_*" -delete
-         find kernel_platform/msm-kernel/android/ -name "abi_gki_protected_exports_*" -delete
+         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8650 -m ${{ github.event.inputs.FEIL }}.xml --depth=1
+         repo sync
+         rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
+         rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
+         sed -i 's/ -dirty//g' kernel_platform/external/dtc/scripts/setlocalversion
          sed -i '$s|echo "\$res"|echo "$res-Mortis"|' kernel_platform/common/scripts/setlocalversion            
-         sed -i '$s|echo "\$res"|echo "$res-Mortis"|' kernel_platform/msm-kernel/scripts/setlocalversion            
-
+         sed -i '$s|echo "\$res"|echo "$res-Mortis"|' kernel_platform/msm-kernel/scripts/setlocalversion
+         
       - name: Set up MKSU
         run: |
          cd kernel_workspace/kernel_platform
          curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/refs/heads/main/kernel/setup.sh" | bash -
-         cd KernelSU       
+         cd KernelSU
          git revert -m 1 $(git log --grep="remove devpts hook" --pretty=format:"%h") -n
          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
@@ -56,13 +62,13 @@ jobs:
         
       - name: Set up susfs
         run: |
-           cd kernel_workspace           
-           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android12-5.10
+           cd kernel_workspace
+           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-6.1
            git clone https://github.com/TanakaLun/kernel_patches4mksu.git
            cd kernel_platform
            cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-           cp ../kernel_patches4mksu/mksu_susfs.patch ./KernelSU/           
-           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch ./common/
+           cp ../kernel_patches4mksu/mksu_susfs.patch ./KernelSU/
+           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./common/
            cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
            cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
@@ -71,7 +77,7 @@ jobs:
            patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
            patch -p1 --forward < mksu_susfs.patch || true
            cd ../common
-           patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
+           patch -p1 < 50_add_susfs_in_gki-android14-6.1.patch || true
            cp ../../kernel_patches4mksu/69_hide_stuff.patch ./
            patch -p1 -F 3 < 69_hide_stuff.patch
            git add -A && git commit -a -m "BUILD Kernel"
@@ -83,21 +89,24 @@ jobs:
         run: |
          cd kernel_workspace
          export LTO=thin
-         ./kernel_platform/oplus/build/oplus_build_kernel.sh waipio gki
+         ./kernel_platform/build_with_bazel.py \
+            -t pineapple \
+            gki \
          
       - name: Make AnyKernel3
         run: |
          git clone https://github.com/TanakaLun/AnyKernel3 --depth=1
          rm -rf ./AnyKernel3/.git
-         cp kernel_workspace/kernel_platform/out/msm-waipio-waipio-gki/dist/Image ./AnyKernel3/
+         cp kernel_workspace/kernel_platform/out/msm-kernel-pineapple-gki/dist/Image ./AnyKernel3/
 
-      - name: Download Latest SUSFS Module
+      - name: Download SUSFS Module
         run: |
          wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
          cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
-          
+
+
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-         name: OP11R_MKSU_${{ env.KSUVER }}
+         name: ${{ github.event.inputs.FEIL }}_MKSU_${{ env.KSUVER }}
          path: ./AnyKernel3/*
