@@ -1,15 +1,22 @@
-name: Build MKSU-SUSFS For OPA3P
+name: Build MKSU-SUSFS For SM8650
 on:
   workflow_dispatch:
    inputs:
-      FEIL:
-        description: "配置文件"
+      MODEL:
+        description: "机型/Model"
         required: true
-        default: 'oneplus_ace3_pro_v'  
+        type: choice
+        options:
+          - oneplus_ace3_pro_v
+          - oneplus_pad2_v
+          - oneplus_ace5
+          - oneplus_13r
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+    env:
+      RELEASE_NAME: "*TEST BUILD* OnePlus Kernels With MKSU & SUSFS For SM8650*TEST BUILD*"
+  
     steps:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
@@ -25,6 +32,15 @@ jobs:
         run: |
          git config --global user.name "build"
          git config --global user.email "3436378798@qq.com"
+         
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: MKSU-SUSFS
+          prerelease: true
+          name: ${{ env.RELEASE_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
 
       - name: Install dependencies
         run: |
@@ -37,11 +53,22 @@ jobs:
          chmod a+x ~/repo
          sudo mv ~/repo /usr/local/bin/repo
 
+      # - name: Initialize repo and sync 4 1+A3P
+        # if: ${{ github.event.inputs.model == '1+Ace3Pro' }}
+        # run: |
+         # mkdir kernel_workspace && cd kernel_workspace
+         # repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8650 -m oneplus_ace3_pro_v.xml --depth=1
+         # repo sync
+         
       - name: Initialize repo 和 sync
         run: |
          mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8650 -m ${{ github.event.inputs.FEIL }}.xml --depth=1
+         repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/sm8650 -m ${{ github.event.inputs.MODEL }}.xml --depth=1
          repo sync
+         
+      - name: Modify kernel version parameters
+        run: |
+         cd kernel_workspace                  
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
@@ -92,7 +119,7 @@ jobs:
          ./kernel_platform/build_with_bazel.py \
             -t pineapple \
             gki \
-         
+                
       - name: Make AnyKernel3
         run: |
          git clone https://github.com/TanakaLun/AnyKernel3 --depth=1
@@ -104,9 +131,15 @@ jobs:
          wget https://github.com/sidex15/ksu_module_susfs/releases/latest/download/ksu_module_susfs_1.5.2+.zip
          cp ksu_module_susfs_1.5.2+.zip ./AnyKernel3/
 
-
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-         name: ${{ github.event.inputs.FEIL }}_MKSU_${{ env.KSUVER }}
+         name: MKSU_${{ github.event.inputs.MODEL }}_${{ env.KSUVER }}
          path: ./AnyKernel3/*
+          
+      - name: Upload Release
+        run: |
+           zip MKSU_${{ github.event.inputs.MODEL }}_${{ env.KSUVER }}.zip ./AnyKernel3/*
+           gh release upload MKSU_${{ github.event.inputs.FEIL }}_${{ env.KSUVER }}.zip
+        env:
+           GITHUB_TOKEN: ${{ secrets.TOKEN }}
