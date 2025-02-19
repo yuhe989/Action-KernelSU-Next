@@ -1,9 +1,7 @@
-name: Build OnePlus 11r Android 13 5.15 Kernel
-
+name: Build MKSU SUSFS For OPAce2
 on:
-  workflow_call:  
-  # This allows this workflow to be called from another workflow
-  
+  workflow_dispatch:
+
 jobs:
   build-kernel-a13-5-15-kernelsu-susfs:
     runs-on: ubuntu-latest
